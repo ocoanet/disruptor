@@ -27,6 +27,7 @@ import com.lmax.disruptor.support.PerfTestUtil;
 import com.lmax.disruptor.support.ValueAdditionEventHandler;
 import com.lmax.disruptor.support.ValueEvent;
 import com.lmax.disruptor.util.DaemonThreadFactory;
+import net.openhft.affinity.AffinityLock;
 
 /**
  * <pre>
@@ -92,16 +93,29 @@ public final class OneToOneSequencedThroughputTest extends AbstractPerfTestDisru
         final CountDownLatch latch = new CountDownLatch(1);
         long expectedCount = batchEventProcessor.getSequence().get() + ITERATIONS;
         handler.reset(latch, expectedCount);
-        executor.submit(batchEventProcessor);
+        executor.submit(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                try (AffinityLock al = AffinityLock.acquireLock())
+                {
+                    batchEventProcessor.run();
+                }
+            }
+        });
+
         long start = System.currentTimeMillis();
 
-        final RingBuffer<ValueEvent> rb = ringBuffer;
-
-        for (long i = 0; i < ITERATIONS; i++)
+        try (AffinityLock al = AffinityLock.acquireLock())
         {
-            long next = rb.next();
-            rb.get(next).setValue(i);
-            rb.publish(next);
+            final RingBuffer<ValueEvent> rb = ringBuffer;
+
+            for (long i = 0; i < ITERATIONS; i++) {
+                long next = rb.next();
+                rb.get(next).setValue(i);
+                rb.publish(next);
+            }
         }
 
         latch.await();

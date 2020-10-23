@@ -168,7 +168,7 @@ public final class BatchEventProcessor<T>
                     eventHandler.onEvent(event, nextSequence, nextSequence == availableSequence);
                     nextSequence++;
                 }
-
+                
                 sequence.set(availableSequence);
             }
             catch (final TimeoutException e)
